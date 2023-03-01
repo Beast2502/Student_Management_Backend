@@ -1,6 +1,7 @@
 const pool = require("../../config/db");
 const queries = require("./queries");
 const bcrypt = require("bcrypt");
+const JWT = require("jsonwebtoken");
 
 const getStudents = (req, res) => {
   pool.query(queries.getStudentsQuery, (error, results) => {
@@ -24,7 +25,7 @@ const addStudent = (req, res) => {
     // check if the email exist
 
     if (results.rows.length) {
-      res.send({ message: "Email already exists" });
+      res.status(400).send({ message: "Email already exists" });
     }
 
     // add student to the db
@@ -46,7 +47,7 @@ const deleteStudent = (req, res) => {
     const noStudentFound = !results.rows.length;
 
     if (noStudentFound) {
-      res.send({ message: "Student already exist !!" });
+      res.status(400).send({ message: "Student already exist !!" });
     }
 
     // else
@@ -101,7 +102,7 @@ const register = async (req, res) => {
   }
 
   if (errors.length > 0) {
-    res.send(errors[0]);
+    res.status(400).send(errors[0]);;
   } else {
     // form validation is passed
 
@@ -112,28 +113,85 @@ const register = async (req, res) => {
       // check if the email exist
 
       if (results.rows.length) {
-       
-        errors.push({message : "Email is already exists !!"});
-        res.send(errors[0]);
+        errors.push({ message: "Email is already exists !!" });
+        return res.status(400).send(errors[0]);
       }
 
       // add student to the db
       pool.query(
         queries.addStudent,
         [name, email, age, dob, hashedPassword],
-        (error, results) => {
+        async(error, results) => {
           if (error) throw error;
-          res.status(201).send({ message: "Student Created Succesfully!!" });
+           // JWT token
+    const token = await JWT.sign(
+      {
+        password,
+      },
+      "knjknknjknkjnknkjnjknkjnkjnkjnknknkjnjknkjnkjnjknk",
+      {
+        expiresIn: 5000,
+      }
+    );
+          res.status(201).send({ message: "Student Created Succesfully!!" ,token : token });
+          console.log(results);
         }
       );
     });
 
    
+    
+   
   }
 };
 
 const login = (req, res) => {
-  return res.send("Login!!!");
+  const {email ,password} = req.body;
+  let errors = [];
+
+  // Check email exist
+  pool.query(queries.checkEmailExists, [email], (error, results) => {
+    if(results.rows.length  === 0){
+      errors.push({ message: "Invalid Email Id" });
+      return res.status(400).send(errors[0]);
+    }
+   
+    // Now get the password from the db 
+
+   
+    pool.query(queries.getPassword ,[email] ,async(error,results)=>{
+      
+      let passDB = results.rows[0].password ;
+      console.log(passDB);
+      
+      let ismatch = await bcrypt.compare(password ,passDB);
+      console.log(ismatch)
+
+      if(!ismatch){
+        errors.push({ message: "Invalid Password !" });
+        return res.status(400).send(errors[0]);
+      }
+      const token = await JWT.sign(
+        {
+          password,
+        },
+        "knjknknjknkjnknkjnjknkjnkjnkjnknknkjnjknkjnkjnjknk",
+        {
+          expiresIn: 5000,
+        }
+      );
+
+      res.json({token})
+    })
+
+  
+
+  })
+
+
+
+  // bcrypt.compare(password)
+  
 };
 
 const dashboard = (req, res) => {
